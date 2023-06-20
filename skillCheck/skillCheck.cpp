@@ -8,17 +8,30 @@
 
 #include <iostream>
 #include <vector>
+#include <thread>
+#include <chrono>
 #include <Windows.h>
 
-/**
- * Create a Bitmap file header..
- *
- * @param hwindowDC : window handle.
- * @param widht	    : image width.
- * @param height    : image height.
- *
- * @return Bitmap header.
- */
+cv::Mat space = cv::imread("./templates/space.png", cv::IMREAD_GRAYSCALE); // Load the template image
+
+bool detectSpace(cv::Mat& inputImage) {
+	cv::Mat grayInput;
+	cv::cvtColor(inputImage, grayInput, cv::COLOR_BGR2GRAY); // Convert the input image to grayscale
+
+	cv::Mat result;
+	cv::matchTemplate(grayInput, space, result, cv::TM_CCOEFF_NORMED); // Perform template matching
+
+	double minVal, maxVal;
+	cv::Point minLoc, maxLoc;
+	cv::minMaxLoc(result, &minVal, &maxVal, &minLoc, &maxLoc); // Find the location with maximum similarity
+
+	if (maxVal > 0.8) { // If the match is stronger than 80%
+		return true;
+	}
+
+	return false;
+}
+
 BITMAPINFOHEADER createBitmapHeader(float width, float height) {
 	BITMAPINFOHEADER bi;
 
@@ -38,13 +51,6 @@ BITMAPINFOHEADER createBitmapHeader(float width, float height) {
 	return bi;
 }
 
-/**
- * Capture a screen window as a matrix.
- *
- * @param hwnd : window handle.
- *
- * @return Mat (Mat of the captured image)
- */
 cv::Mat captureScreenMat(HWND hwnd) {
 	cv::Mat src;
 
@@ -54,25 +60,36 @@ cv::Mat captureScreenMat(HWND hwnd) {
 	SetStretchBltMode(hwindowCompatibleDC, COLORONCOLOR);
 
 	// define scale, height and width
-	float scale = 1.25;
-	int screenx = GetSystemMetrics(SM_XVIRTUALSCREEN);
-	int screeny = GetSystemMetrics(SM_YVIRTUALSCREEN);
-	float width = GetSystemMetrics(SM_CXVIRTUALSCREEN) * scale;
-	float height = GetSystemMetrics(SM_CYVIRTUALSCREEN) * scale;
+	RECT windowRect;
+	GetClientRect(hwnd, &windowRect);
+
+	// Define the capture area as a percentage of the window size
+	float leftRatio = 0.5781;
+	float topRatio = 0.4930;
+	float rightRatio = 0.6718;
+	float bottomRatio = 0.6527;
+
+	int topLeftX = static_cast<int>(windowRect.right * leftRatio);
+	int topLeftY = static_cast<int>(windowRect.bottom * topRatio);
+	int bottomRightX = static_cast<int>(windowRect.right * rightRatio);
+	int bottomRightY = static_cast<int>(windowRect.bottom * bottomRatio);
+
+	int captureWidth = bottomRightX - topLeftX;
+	int captureHeight = bottomRightY - topLeftY;
 
 	// create mat object
-	src.create(height, width, CV_8UC4);
+	src.create(captureHeight, captureWidth, CV_8UC4);
 
 	// create a bitmap
-	HBITMAP hbwindow = CreateCompatibleBitmap(hwindowDC, width, height);
-	BITMAPINFOHEADER bi = createBitmapHeader(width, height);
+	HBITMAP hbwindow = CreateCompatibleBitmap(hwindowDC, captureWidth, captureHeight);
+	BITMAPINFOHEADER bi = createBitmapHeader(captureWidth, captureHeight);
 
 	// use the previously created device context with the bitmap
 	SelectObject(hwindowCompatibleDC, hbwindow);
 
 	// copy from the window device context to the bitmap device context
-	StretchBlt(hwindowCompatibleDC, 0, 0, width, height, hwindowDC, screenx, screeny, width, height, SRCCOPY);  //change SRCCOPY to NOTSRCCOPY for wacky colors !
-	GetDIBits(hwindowCompatibleDC, hbwindow, 0, height, src.data, (BITMAPINFO*)&bi, DIB_RGB_COLORS);            //copy from hwindowCompatibleDC to hbwindow
+	BitBlt(hwindowCompatibleDC, 0, 0, captureWidth, captureHeight, hwindowDC, topLeftX, topLeftY, SRCCOPY);
+	GetDIBits(hwindowCompatibleDC, hbwindow, 0, captureHeight, src.data, (BITMAPINFO*)&bi, DIB_RGB_COLORS);
 
 	// avoid memory leak
 	DeleteObject(hbwindow);
@@ -83,28 +100,36 @@ cv::Mat captureScreenMat(HWND hwnd) {
 }
 
 int main() {
-	HWND hwnd = GetDesktopWindow();
+	LPCWSTR window_title = L"Skill Check Simulator - Brave";
+	//LPCWSTR window_title = L"DeadByDaylight  ";
+	HWND hwnd = FindWindow(NULL, window_title);
+	if (hwnd == NULL) {
+		std::cerr << "Could not find window. Error: " << GetLastError() << std::endl;
+		return -1;
+	}
 	cv::namedWindow("output", cv::WINDOW_NORMAL);
 
 	// Declare variables to calculate FPS
 	double fps;
 	cv::TickMeter tm;
 
-	while (true)
-	{
+	while (true) {
 		tm.reset();
 		tm.start();
 
 		cv::Mat src = captureScreenMat(hwnd);
+		if (detectSpace(src)) {
+			std::cout << "Space detected" << std::endl;
+		}
 		cv::imshow("output", src);
 
 		tm.stop();
 
-		// Calculate frames per second (FPS)
+	// Calculate frames per second (FPS)
 		fps = 1.0 / tm.getTimeSec();
-		std::cout << "FPS: " << fps << std::endl;
+		//std::cout << "FPS: " << fps << std::endl;
 
-		// Break the loop if 'ESC' key is pressed.
+	// Break the loop if 'ESC' key is pressed.
 		if (cv::waitKey(1) == 27)
 			break;
 	}
