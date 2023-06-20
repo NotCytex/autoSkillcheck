@@ -12,26 +12,6 @@
 #include <chrono>
 #include <Windows.h>
 
-cv::Mat space = cv::imread("./templates/space.png", cv::IMREAD_GRAYSCALE); // Load the template image
-
-bool detectSpace(cv::Mat& inputImage) {
-	cv::Mat grayInput;
-	cv::cvtColor(inputImage, grayInput, cv::COLOR_BGR2GRAY); // Convert the input image to grayscale
-
-	cv::Mat result;
-	cv::matchTemplate(grayInput, space, result, cv::TM_CCOEFF_NORMED); // Perform template matching
-
-	double minVal, maxVal;
-	cv::Point minLoc, maxLoc;
-	cv::minMaxLoc(result, &minVal, &maxVal, &minLoc, &maxLoc); // Find the location with maximum similarity
-
-	if (maxVal > 0.8) { // If the match is stronger than 80%
-		return true;
-	}
-
-	return false;
-}
-
 BITMAPINFOHEADER createBitmapHeader(float width, float height) {
 	BITMAPINFOHEADER bi;
 
@@ -64,18 +44,18 @@ cv::Mat captureScreenMat(HWND hwnd) {
 	GetClientRect(hwnd, &windowRect);
 
 	// Define the capture area as a percentage of the window size
-	float leftRatio = 0.5781;
-	float topRatio = 0.4930;
-	float rightRatio = 0.6718;
-	float bottomRatio = 0.6527;
+	double leftRatio = 0.5781;
+	double topRatio = 0.4930;
+	double rightRatio = 0.6718;
+	double bottomRatio = 0.6527;
 
 	int topLeftX = static_cast<int>(windowRect.right * leftRatio);
 	int topLeftY = static_cast<int>(windowRect.bottom * topRatio);
 	int bottomRightX = static_cast<int>(windowRect.right * rightRatio);
 	int bottomRightY = static_cast<int>(windowRect.bottom * bottomRatio);
 
-	int captureWidth = bottomRightX - topLeftX;
-	int captureHeight = bottomRightY - topLeftY;
+	float captureWidth = bottomRightX - topLeftX;
+	float captureHeight = bottomRightY - topLeftY;
 
 	// create mat object
 	src.create(captureHeight, captureWidth, CV_8UC4);
@@ -99,40 +79,103 @@ cv::Mat captureScreenMat(HWND hwnd) {
 	return src;
 }
 
-int main() {
-	LPCWSTR window_title = L"Skill Check Simulator - Brave";
-	//LPCWSTR window_title = L"DeadByDaylight  ";
-	HWND hwnd = FindWindow(NULL, window_title);
-	if (hwnd == NULL) {
-		std::cerr << "Could not find window. Error: " << GetLastError() << std::endl;
-		return -1;
+cv::Mat space = cv::imread("./resources/space.png"); // Load the template image
+bool detectSpace(cv::Mat& inputImage) {
+	cv::Mat grayInput;
+	cv::cvtColor(inputImage, grayInput, cv::COLOR_BGR2GRAY); // Convert the input image to grayscale
+
+	cv::Mat result;
+	cv::matchTemplate(grayInput, space, result, cv::TM_CCOEFF_NORMED); // Perform template matching
+
+	double minVal, maxVal;
+	cv::Point minLoc, maxLoc;
+	cv::minMaxLoc(result, &minVal, &maxVal, &minLoc, &maxLoc); // Find the location with maximum similarity
+
+	if (maxVal > 0.8) { // If the match is stronger than 80%
+		return true;
 	}
+
+	return false;
+}
+
+cv::Mat extractWhiteBoxContour(const cv::Mat& inputImage) {
+	// Step 1: Preprocess the image
+	cv::Mat grayImage;
+	cv::cvtColor(inputImage, grayImage, cv::COLOR_BGR2GRAY);
+
+	cv::Mat binaryImage;
+	cv::threshold(grayImage, binaryImage, 0, 255, cv::THRESH_BINARY | cv::THRESH_OTSU);
+
+	// Step 2: Find contours
+	std::vector<std::vector<cv::Point>> contours;
+	cv::findContours(binaryImage, contours, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
+
+	// Step 3: Filter contours based on criteria
+	std::vector<cv::Point> whiteBoxContour;
+
+	for (const auto& contour : contours) {
+		double contourArea = cv::contourArea(contour); 
+		cv::Rect boundingRect = cv::boundingRect(contour);
+		double aspectRatio = static_cast<double>(boundingRect.width) / boundingRect.height;
+
+		// Criteria to filter the white box contour
+		if (contourArea > 100 && contourArea < 1300 &&
+			aspectRatio > 0.8 && aspectRatio < 1.2 &&
+			boundingRect.width > 50 && boundingRect.height > 50) {
+			whiteBoxContour = contour;
+			break; // Assuming there is only one white box, exit the loop after finding it
+		}
+	}
+
+	// Step 4: Create an output image with the white box contour
+	cv::Mat outputImage = inputImage.clone();
+	cv::drawContours(outputImage, std::vector<std::vector<cv::Point>>{whiteBoxContour}, -1, cv::Scalar(0, 255, 0), 2);
+
+	return outputImage;
+}
+
+
+int main() {
+	//LPCWSTR window_title = L"Skill Check Simulator - Brave";
+	////LPCWSTR window_title = L"DeadByDaylight  ";
+	//HWND hwnd = FindWindow(NULL, window_title);
+	//if (hwnd == NULL) {
+	//	std::cerr << "Could not find window. Error: " << GetLastError() << std::endl;
+	//	return -1;
+	//}
 	cv::namedWindow("output", cv::WINDOW_NORMAL);
 
-	// Declare variables to calculate FPS
-	double fps;
-	cv::TickMeter tm;
+	//// Declare variables to calculate FPS
+	//double fps;
+	//cv::TickMeter tm;
 
-	while (true) {
-		tm.reset();
-		tm.start();
+	//while (true) {
+	//	tm.reset();
+	//	tm.start();
 
-		cv::Mat src = captureScreenMat(hwnd);
-		if (detectSpace(src)) {
-			std::cout << "Space detected" << std::endl;
-		}
-		cv::imshow("output", src);
+	//	cv::Mat src = captureScreenMat(hwnd);
+	//	if (detectSpace(src)) {
+	//		//std::cout << "Space detected" << std::endl;
+	//	}
+	//	cv::imshow("output", src);
 
-		tm.stop();
+	//	tm.stop();
 
-	// Calculate frames per second (FPS)
-		fps = 1.0 / tm.getTimeSec();
-		//std::cout << "FPS: " << fps << std::endl;
+	//// Calculate frames per second (FPS)
+	//	fps = 1.0 / tm.getTimeSec();
+	//	//std::cout << "FPS: " << fps << std::endl;
 
-	// Break the loop if 'ESC' key is pressed.
-		if (cv::waitKey(1) == 27)
-			break;
-	}
+	//// Break the loop if 'ESC' key is pressed.
+	//	if (cv::waitKey(1) == 27)
+	//		break;
+	//}
 
+	cv::Mat test = cv::imread("./resources/test.png");
+	cv::Mat outputImage = extractWhiteBoxContour(test);
+
+
+	cv::imshow("output", outputImage);
+
+	cv::waitKey(0);
 	return 0;
 }
