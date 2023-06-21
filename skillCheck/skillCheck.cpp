@@ -8,6 +8,8 @@
 
 #include <iostream>
 #include <vector>
+#include <numeric>
+#include <algorithm>
 #include <thread>
 #include <chrono>
 #include <Windows.h>
@@ -108,20 +110,25 @@ cv::Mat extractWhiteBoxContour(const cv::Mat& inputImage) {
 
 	// Step 2: Find contours
 	std::vector<std::vector<cv::Point>> contours;
-	cv::findContours(binaryImage, contours, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
+	cv::findContours(binaryImage, contours, cv::RETR_LIST, cv::CHAIN_APPROX_SIMPLE);
 
 	// Step 3: Filter contours based on criteria
 	std::vector<cv::Point> whiteBoxContour;
 
 	for (const auto& contour : contours) {
-		double contourArea = cv::contourArea(contour); 
+		double contourArea = cv::contourArea(contour);
 		cv::Rect boundingRect = cv::boundingRect(contour);
 		double aspectRatio = static_cast<double>(boundingRect.width) / boundingRect.height;
 
 		// Criteria to filter the white box contour
-		if (contourArea > 100 && contourArea < 1300 &&
-			aspectRatio > 0.8 && aspectRatio < 1.2 &&
-			boundingRect.width > 50 && boundingRect.height > 50) {
+		if (contourArea > 100 && contourArea < 200 &&
+			boundingRect.width > 10 && boundingRect.height > 10 &&
+			boundingRect.width < 80 && boundingRect.height < 80) {
+			
+			std::cout << contourArea << std::endl;
+			std::cout << boundingRect.width << std::endl;
+			std::cout << boundingRect.height << std::endl;
+
 			whiteBoxContour = contour;
 			break; // Assuming there is only one white box, exit the loop after finding it
 		}
@@ -129,7 +136,12 @@ cv::Mat extractWhiteBoxContour(const cv::Mat& inputImage) {
 
 	// Step 4: Create an output image with the white box contour
 	cv::Mat outputImage = inputImage.clone();
-	cv::drawContours(outputImage, std::vector<std::vector<cv::Point>>{whiteBoxContour}, -1, cv::Scalar(0, 255, 0), 2);
+	if (!whiteBoxContour.empty()) {
+		cv::drawContours(outputImage, std::vector<std::vector<cv::Point>>{whiteBoxContour}, -1, cv::Scalar(0, 255, 0), 2);
+	}
+	else {
+		std::cout << "None" << std::endl;
+	}
 
 	return outputImage;
 }
@@ -172,7 +184,6 @@ int main() {
 
 	cv::Mat test = cv::imread("./resources/test.png");
 	cv::Mat outputImage = extractWhiteBoxContour(test);
-
 
 	cv::imshow("output", outputImage);
 
