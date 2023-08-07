@@ -16,15 +16,17 @@
 #include "screencapture.h"
 
 screencapture sc;
-//cv::Mat src = sc.captureScreenMat(hwnd);
+
 
 cv::Mat space = cv::imread("./resources/space.png"); // Load the template image
 bool detectSpace(cv::Mat& inputImage) {
 	cv::Mat grayInput;
 	cv::cvtColor(inputImage, grayInput, cv::COLOR_BGR2GRAY); // Convert the input image to grayscale
+	cv::Mat graySpace;
+	cv::cvtColor(space, graySpace, cv::COLOR_BGR2GRAY); // Convert the space image to grayscale
 
 	cv::Mat result;
-	cv::matchTemplate(grayInput, space, result, cv::TM_CCOEFF_NORMED); // Perform template matching
+	cv::matchTemplate(grayInput, graySpace, result, cv::TM_CCOEFF_NORMED); // Perform template matching
 
 	double minVal, maxVal;
 	cv::Point minLoc, maxLoc;
@@ -37,51 +39,52 @@ bool detectSpace(cv::Mat& inputImage) {
 	return false;
 }
 
-cv::Scalar whiteLow = cv::Scalar(184, 185, 185);
-cv::Scalar whiteHigh = cv::Scalar(193, 188, 188);
-cv::Mat extractWhiteBoxContour(const cv::Mat& inputImage) {
-	cv::Mat background;
-	inputImage.copyTo(background);
 
-	cv::cvtColor(inputImage, inputImage, cv::COLOR_BGR2RGB);
-
-	cv::Mat mask;
-	cv::inRange(inputImage, whiteLow, whiteHigh, mask);
-	cv::imshow("mask", mask);
-
-	std::vector<std::vector<cv::Point>> contours;
-	cv::findContours(mask, contours, cv::RETR_LIST, cv::CHAIN_APPROX_SIMPLE);
-
-	std::vector<cv::Point> whiteBoxContour;
-	for (const auto& contour : contours) {
-		double contourArea = cv::contourArea(contour);
-		cv::Rect boundingRect = cv::boundingRect(contour);
-		double aspectRatio = static_cast<double>(boundingRect.width) / boundingRect.height;
-
-		// Criteria to filter the white box contour
-		if (contourArea > 5 && contourArea < 200 &&
-			boundingRect.width > 5 && boundingRect.height > 5 &&
-			boundingRect.width < 200 && boundingRect.height < 200) {
-
-			std::cout << contourArea << std::endl;
-			std::cout << boundingRect.width << std::endl;
-			std::cout << boundingRect.height << std::endl;
-
-			whiteBoxContour = contour;
-			break; // Assuming there is only one white box, exit the loop after finding it
-		}
-	}
-
-	cv::Mat outputImage = inputImage.clone();
-	if (!whiteBoxContour.empty()) {
-		cv::drawContours(outputImage, std::vector<std::vector<cv::Point>>{whiteBoxContour}, -1, cv::Scalar(0, 255, 0), 2);
-	}
-	else {
-		std::cout << "None" << std::endl;
-	}
-
-	return outputImage;
-}
+//cv::Scalar whiteLow = cv::Scalar(184, 185, 185);
+//cv::Scalar whiteHigh = cv::Scalar(193, 188, 188);
+//cv::Mat extractWhiteBoxContour(const cv::Mat& inputImage) {
+//	cv::Mat background;
+//	inputImage.copyTo(background);
+//
+//	cv::cvtColor(inputImage, inputImage, cv::COLOR_BGR2RGB);
+//
+//	cv::Mat mask;
+//	cv::inRange(inputImage, whiteLow, whiteHigh, mask);
+//	cv::imshow("mask", mask);
+//
+//	std::vector<std::vector<cv::Point>> contours;
+//	cv::findContours(mask, contours, cv::RETR_LIST, cv::CHAIN_APPROX_SIMPLE);
+//
+//	std::vector<cv::Point> whiteBoxContour;
+//	for (const auto& contour : contours) {
+//		double contourArea = cv::contourArea(contour);
+//		cv::Rect boundingRect = cv::boundingRect(contour);
+//		double aspectRatio = static_cast<double>(boundingRect.width) / boundingRect.height;
+//
+//		// Criteria to filter the white box contour
+//		if (contourArea > 5 && contourArea < 200 &&
+//			boundingRect.width > 5 && boundingRect.height > 5 &&
+//			boundingRect.width < 200 && boundingRect.height < 200) {
+//
+//			std::cout << contourArea << std::endl;
+//			std::cout << boundingRect.width << std::endl;
+//			std::cout << boundingRect.height << std::endl;
+//
+//			whiteBoxContour = contour;
+//			break; // Assuming there is only one white box, exit the loop after finding it
+//		}
+//	}
+//
+//	cv::Mat outputImage = inputImage.clone();
+//	if (!whiteBoxContour.empty()) {
+//		cv::drawContours(outputImage, std::vector<std::vector<cv::Point>>{whiteBoxContour}, -1, cv::Scalar(0, 255, 0), 2);
+//	}
+//	else {
+//		std::cout << "None" << std::endl;
+//	}
+//
+//	return outputImage;
+//}
 	
 
 int main() {
@@ -92,7 +95,7 @@ int main() {
 	//	std::cerr << "Could not find window. Error: " << GetLastError() << std::endl;
 	//	return -1;
 	//}
-	cv::namedWindow("output", cv::WINDOW_NORMAL);
+	//cv::namedWindow("output", cv::WINDOW_NORMAL);
 
 	//// Declare variables to calculate FPS
 	//double fps;
@@ -101,8 +104,7 @@ int main() {
 	//while (true) {
 	//	tm.reset();
 	//	tm.start();
-
-	//	cv::Mat src = captureScreenMat(hwnd);
+	//  cv::Mat src = sc.captureScreenMat(hwnd);
 	//	if (detectSpace(src)) {
 	//		//std::cout << "Space detected" << std::endl;
 	//	}
@@ -123,12 +125,10 @@ int main() {
 	cv::Mat test = cv::imread("./resources/nig4.png");
 	//cv::Mat cropped = cropSpace(test);
 	std::cout << detectSpace(test) << std::endl;
-	cv::Mat outputImage = extractWhiteBoxContour(test);
-	
-	
+	//cv::Mat outputImage = extractWhiteBoxContour(test);
 	
 	//cv::imshow("cropped", cropped);
-	cv::imshow("output", outputImage);
+	//cv::imshow("output", outputImage);
 
 	cv::waitKey(0);
 	return 0;
