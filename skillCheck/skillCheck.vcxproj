@@ -130,11 +130,16 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="screencapture.cpp" />
     <ClCompile Include="skillCheck.cpp" />
   </ItemGroup>
   <ItemGroup>
     <Image Include="resources\test.png" />
     <Image Include="templates\space.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="screencapture.h" />
+    <ClInclude Include="skillcheck.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

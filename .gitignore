@@ -361,3 +361,7 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+/skillCheck/resources/nig4.png
+/skillCheck/resources/nig3.png
+/skillCheck/resources/nig2.png
+/skillCheck/resources/nig.png
