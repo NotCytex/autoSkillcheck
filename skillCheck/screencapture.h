@@ -5,7 +5,7 @@
 class screencapture {
 public:
 	BITMAPINFOHEADER createBitmapHeader(float width, float height);
-	cv::Mat captureScreenMat(HWND hwnd);
+	cv::Mat captureScreenMat(HWND hwnd, const cv::Rect& roi);
 private:
 	BITMAPINFOHEADER bi;
 };

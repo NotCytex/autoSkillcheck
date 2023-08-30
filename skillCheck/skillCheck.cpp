@@ -17,7 +17,6 @@
 
 screencapture sc;
 
-
 cv::Mat space = cv::imread("./resources/space.png"); // Load the template image
 cv::Mat cropSpace(cv::Mat& inputImage) {
 	cv::Mat grayInput, graySpace;
@@ -33,7 +32,7 @@ cv::Mat cropSpace(cv::Mat& inputImage) {
 
 	if (maxVal > 0.7) {
 		int paddingX = 25;  // horizontal padding
-		int paddingY = 65; // vertical padding
+		int paddingY = 68; // vertical padding
 		cv::Point topLeft(max(maxLoc.x - paddingX, 0), max(maxLoc.y - paddingY, 0));
 		cv::Point bottomRight(min(maxLoc.x + 128 + paddingX, inputImage.cols),
 			min(maxLoc.y + 39 + paddingY, inputImage.rows));
@@ -48,27 +47,26 @@ cv::Mat cropSpace(cv::Mat& inputImage) {
 	return cv::Mat();
 }
 
-
-cv::Scalar whiteLow = cv::Scalar(180, 180, 180);
-cv::Scalar whiteHigh = cv::Scalar(195, 195, 195);
-cv::Mat extractWhiteBoxContour(cv::Mat& inputImage) {
+cv::Rect extractWhiteBoxContour(cv::Mat& inputImage) {
 	// Crop the image
 	cv::Mat croppedImage = cropSpace(inputImage);
 	if (croppedImage.empty()) {
-		return cv::Mat();
+		return cv::Rect();
 	}
 
 	cv::Mat background;
 	croppedImage.copyTo(background);
 
-	cv::cvtColor(croppedImage, croppedImage, cv::COLOR_BGR2RGB);
+	cv::Mat grayCroppedImage;
+	cv::cvtColor(croppedImage, grayCroppedImage, cv::COLOR_BGR2GRAY);
 
 	cv::Mat mask;
-	cv::inRange(croppedImage, whiteLow, whiteHigh, mask);
+	cv::threshold(grayCroppedImage, mask, 180, 190, cv::THRESH_BINARY);
 
 	std::vector<std::vector<cv::Point>> contours;
 	cv::findContours(mask, contours, cv::RETR_LIST, cv::CHAIN_APPROX_SIMPLE);
 
+	cv::Rect whiteBoxRect;
 	std::vector<cv::Point> whiteBoxContour;
 	for (const auto& contour : contours) {
 		double contourArea = cv::contourArea(contour);
@@ -76,28 +74,31 @@ cv::Mat extractWhiteBoxContour(cv::Mat& inputImage) {
 		double aspectRatio = static_cast<double>(boundingRect.width) / boundingRect.height;
 
 		// Criteria to filter the white box contour
-		if (boundingRect.width > 8 && boundingRect.height > 8 &&
-			boundingRect.width < 20 && boundingRect.height < 20) {
+		if (contourArea > 4 &&
+			boundingRect.width > 8 && boundingRect.height > 8 &&
+			boundingRect.width < 30 && boundingRect.height < 30) {
 
 			std::cout << "Found" << std::endl;
 
 			whiteBoxContour = contour;
+			whiteBoxRect = boundingRect;
 			break; // Assuming there is only one white box, exit the loop after finding it
 		}
 	}
 
 	cv::Mat outputImage = croppedImage.clone();
 	if (!whiteBoxContour.empty()) {
-		cv::drawContours(outputImage, std::vector<std::vector<cv::Point>>{whiteBoxContour}, -1, cv::Scalar(0, 255, 0), 2);
-		//cv::imshow("test", outputImage);]
-		return outputImage;
+		cv::drawContours(outputImage, std::vector<std::vector<cv::Point>>{whiteBoxContour}, -1, cv::Scalar(0, 255, 0), 1);
+		cv::imshow("test", outputImage);
+
+		return whiteBoxRect;
 	}
 	
 	std::cout << "Failed" << std::endl;
-	return cv::Mat();
+	return cv::Rect();
 }
 	
-
+bool foundGreatZone = false;
 int main() {
 	LPCWSTR window_title = L"Skill Check Simulator - Brave";
 	//LPCWSTR window_title = L"DeadByDaylight  ";
@@ -107,17 +108,51 @@ int main() {
 		return -1;
 	}
 
+	RECT windowRect;
+	GetClientRect(hwnd, &windowRect);
+
+	// Set initial values to capture the entire window
+	int topLeftX = 0;
+	int topLeftY = 0;
+	int width = windowRect.right;
+	int height = windowRect.bottom;
+	
+	cv::Rect roi(topLeftX, topLeftY, width, height);
+
 	// Declare variables to calculate FPS
 	double fps;
 	cv::TickMeter tm;
-
+	
 	while (true) {
 		//tm.reset();
 		//tm.start();
+		cv::Mat src = sc.captureScreenMat(hwnd, roi);
 
-		cv::Mat src = sc.captureScreenMat(hwnd);
-		cv::Mat output = extractWhiteBoxContour(src);
-		cv::imshow("Output", src);
+		if (!foundGreatZone) {
+			roi = extractWhiteBoxContour(src);
+			if (roi.area() > 0) {
+				foundGreatZone = true;
+			}
+			std::cout << roi << std::endl;
+		}
+		else {
+			cv::Mat redMask;
+			cv::inRange(src, cv::Scalar(0, 0, 150), cv::Scalar(50, 50, 255), redMask);
+			if (cv::countNonZero(redMask) > 10) {
+				// Simulate pressing the spacebar
+				INPUT input;
+				input.type = INPUT_KEYBOARD;
+				input.ki.wVk = VK_SPACE;
+				input.ki.dwFlags = 0;  // key down
+				SendInput(1, &input, sizeof(INPUT));
+				input.ki.dwFlags = KEYEVENTF_KEYUP;  // key up
+				SendInput(1, &input, sizeof(INPUT));
+
+				foundGreatZone = false;
+				roi = cv::Rect(topLeftX, topLeftY, width, height);
+			}
+		}
+		
 
 		//tm.stop();
 
