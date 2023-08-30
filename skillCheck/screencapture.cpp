@@ -31,19 +31,14 @@ cv::Mat screencapture::captureScreenMat(HWND hwnd) {
 	RECT windowRect;
 	GetClientRect(hwnd, &windowRect);
 
-	// Define the capture area as a percentage of the window size
-	double leftRatio = 0.5781;
-	double topRatio = 0.4930;
-	double rightRatio = 0.6718;
-	double bottomRatio = 0.6527;
+	// Set capture area to full dimensions of the window
+	int topLeftX = 0;
+	int topLeftY = 0;
+	int bottomRightX = windowRect.right;
+	int bottomRightY = windowRect.bottom;
 
-	int topLeftX = static_cast<int>(windowRect.right * leftRatio);
-	int topLeftY = static_cast<int>(windowRect.bottom * topRatio);
-	int bottomRightX = static_cast<int>(windowRect.right * rightRatio);
-	int bottomRightY = static_cast<int>(windowRect.bottom * bottomRatio);
-
-	float captureWidth = bottomRightX - topLeftX;
-	float captureHeight = bottomRightY - topLeftY;
+	int captureWidth = bottomRightX - topLeftX;
+	int captureHeight = bottomRightY - topLeftY;
 
 	// create mat object
 	src.create(captureHeight, captureWidth, CV_8UC4);

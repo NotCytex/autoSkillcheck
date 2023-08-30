@@ -31,15 +31,17 @@ cv::Mat cropSpace(cv::Mat& inputImage) {
 	cv::Point minLoc, maxLoc;
 	cv::minMaxLoc(result, &minVal, &maxVal, &minLoc, &maxLoc); // Find the location with maximum similarity
 
-	if (maxVal > 0.8) { // If the match is stronger than 80%
-		int padding = 90;
-		cv::Point topLeft(max(minLoc.x - padding, 0), max(minLoc.y - padding, 0));
-		cv::Point bottomRight(min(minLoc.x + space.cols + padding, inputImage.cols),
-			min(minLoc.y + space.rows + padding, inputImage.rows));
+	if (maxVal > 0.7) {
+		int paddingX = 25;  // horizontal padding
+		int paddingY = 65; // vertical padding
+		cv::Point topLeft(max(maxLoc.x - paddingX, 0), max(maxLoc.y - paddingY, 0));
+		cv::Point bottomRight(min(maxLoc.x + 128 + paddingX, inputImage.cols),
+			min(maxLoc.y + 39 + paddingY, inputImage.rows));
 
 		// Create and return the cropped image
 		cv::Rect roi(topLeft, bottomRight);
 		cv::Mat croppedImage = inputImage(roi).clone();
+
 		return croppedImage;
 	}
 
@@ -47,17 +49,23 @@ cv::Mat cropSpace(cv::Mat& inputImage) {
 }
 
 
-cv::Scalar whiteLow = cv::Scalar(184, 185, 185);
-cv::Scalar whiteHigh = cv::Scalar(193, 191, 190);
-cv::Mat extractWhiteBoxContour(const cv::Mat& inputImage) {
-	cv::Mat background;
-	inputImage.copyTo(background);
+cv::Scalar whiteLow = cv::Scalar(184, 185, 182);
+cv::Scalar whiteHigh = cv::Scalar(193, 191, 192);
+cv::Mat extractWhiteBoxContour(cv::Mat& inputImage) {
+	// Crop the image
+	cv::Mat croppedImage = cropSpace(inputImage);
+	if (croppedImage.empty()) {
+		//std::cout << "Crop failed or space not found in the image" << std::endl;
+		return cv::Mat();
+	}
 
-	cv::cvtColor(inputImage, inputImage, cv::COLOR_BGR2RGB);
+	cv::Mat background;
+	croppedImage.copyTo(background);
+
+	cv::cvtColor(croppedImage, croppedImage, cv::COLOR_BGR2RGB);
 
 	cv::Mat mask;
-	cv::inRange(inputImage, whiteLow, whiteHigh, mask);
-	cv::imshow("mask", mask);
+	cv::inRange(croppedImage, whiteLow, whiteHigh, mask);
 
 	std::vector<std::vector<cv::Point>> contours;
 	cv::findContours(mask, contours, cv::RETR_LIST, cv::CHAIN_APPROX_SIMPLE);
@@ -73,21 +81,21 @@ cv::Mat extractWhiteBoxContour(const cv::Mat& inputImage) {
 			boundingRect.width > 2 && boundingRect.height > 2 &&
 			boundingRect.width < 200 && boundingRect.height < 200) {
 
-			std::cout << contourArea << std::endl;
-			std::cout << boundingRect.width << std::endl;
-			std::cout << boundingRect.height << std::endl;
+			std::cout << "Found" << std::endl;
 
 			whiteBoxContour = contour;
 			break; // Assuming there is only one white box, exit the loop after finding it
 		}
 	}
 
-	cv::Mat outputImage = inputImage.clone();
+	cv::Mat outputImage = croppedImage.clone();
 	if (!whiteBoxContour.empty()) {
 		cv::drawContours(outputImage, std::vector<std::vector<cv::Point>>{whiteBoxContour}, -1, cv::Scalar(0, 255, 0), 2);
+		cv::imshow("test", outputImage);
+		//cv::waitKey(0);
 	}
 	else {
-		std::cout << "None" << std::endl;
+		std::cout << "Failed" << std::endl;
 	}
 
 	return outputImage;
@@ -95,46 +103,35 @@ cv::Mat extractWhiteBoxContour(const cv::Mat& inputImage) {
 	
 
 int main() {
-	//LPCWSTR window_title = L"Skill Check Simulator - Brave";
-	////LPCWSTR window_title = L"DeadByDaylight  ";
-	//HWND hwnd = FindWindow(NULL, window_title);
-	//if (hwnd == NULL) {
-	//	std::cerr << "Could not find window. Error: " << GetLastError() << std::endl;
-	//	return -1;
-	//}
-	cv::namedWindow("output", cv::WINDOW_NORMAL);
+	LPCWSTR window_title = L"Skill Check Simulator - Brave";
+	//LPCWSTR window_title = L"DeadByDaylight  ";
+	HWND hwnd = FindWindow(NULL, window_title);
+	if (hwnd == NULL) {
+		std::cerr << "Could not find window. Error: " << GetLastError() << std::endl;
+		return -1;
+	}
 
-	//// Declare variables to calculate FPS
-	//double fps;
-	//cv::TickMeter tm;
+	// Declare variables to calculate FPS
+	double fps;
+	cv::TickMeter tm;
 
-	//while (true) {
-	//	tm.reset();
-	//	tm.start();
-	//  cv::Mat src = sc.captureScreenMat(hwnd);
-	//	if (detectSpace(src)) {
-	//		//std::cout << "Space detected" << std::endl;
-	//	}
-	//	cv::imshow("output", src);
+	while (true) {
+		//tm.reset();
+		//tm.start();
 
-	//	tm.stop();
+		cv::Mat src = sc.captureScreenMat(hwnd);
+		extractWhiteBoxContour(src);
 
-	//// Calculate frames per second (FPS)
-	//	fps = 1.0 / tm.getTimeSec();
-	//	//std::cout << "FPS: " << fps << std::endl;
+		//tm.stop();
 
-	//// Break the loop if 'ESC' key is pressed.
-	//	if (cv::waitKey(1) == 27)
-	//		break;
-	//}
-	
-	
-	cv::Mat test = cv::imread("./resources/nig2.png");
-	cv::Mat cropped = cropSpace(test);
-	cv::Mat outputImage = extractWhiteBoxContour(test);
-	
-	cv::imshow("cropped", cropped);
-	cv::imshow("output", outputImage);
+	// Calculate frames per second (FPS)
+		//fps = 1.0 / tm.getTimeSec();
+		//std::cout << "FPS: " << fps << std::endl;
+
+	// Break the loop if 'ESC' key is pressed.
+		if (cv::waitKey(1) == 27)
+			break;
+	}
 
 	cv::waitKey(0);
 	return 0;
