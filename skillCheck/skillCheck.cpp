@@ -49,13 +49,12 @@ cv::Mat cropSpace(cv::Mat& inputImage) {
 }
 
 
-cv::Scalar whiteLow = cv::Scalar(184, 185, 182);
-cv::Scalar whiteHigh = cv::Scalar(193, 191, 192);
+cv::Scalar whiteLow = cv::Scalar(180, 180, 180);
+cv::Scalar whiteHigh = cv::Scalar(195, 195, 195);
 cv::Mat extractWhiteBoxContour(cv::Mat& inputImage) {
 	// Crop the image
 	cv::Mat croppedImage = cropSpace(inputImage);
 	if (croppedImage.empty()) {
-		//std::cout << "Crop failed or space not found in the image" << std::endl;
 		return cv::Mat();
 	}
 
@@ -77,9 +76,8 @@ cv::Mat extractWhiteBoxContour(cv::Mat& inputImage) {
 		double aspectRatio = static_cast<double>(boundingRect.width) / boundingRect.height;
 
 		// Criteria to filter the white box contour
-		if (contourArea > 2 && contourArea < 200 &&
-			boundingRect.width > 2 && boundingRect.height > 2 &&
-			boundingRect.width < 200 && boundingRect.height < 200) {
+		if (boundingRect.width > 8 && boundingRect.height > 8 &&
+			boundingRect.width < 20 && boundingRect.height < 20) {
 
 			std::cout << "Found" << std::endl;
 
@@ -91,14 +89,12 @@ cv::Mat extractWhiteBoxContour(cv::Mat& inputImage) {
 	cv::Mat outputImage = croppedImage.clone();
 	if (!whiteBoxContour.empty()) {
 		cv::drawContours(outputImage, std::vector<std::vector<cv::Point>>{whiteBoxContour}, -1, cv::Scalar(0, 255, 0), 2);
-		cv::imshow("test", outputImage);
-		//cv::waitKey(0);
+		//cv::imshow("test", outputImage);]
+		return outputImage;
 	}
-	else {
-		std::cout << "Failed" << std::endl;
-	}
-
-	return outputImage;
+	
+	std::cout << "Failed" << std::endl;
+	return cv::Mat();
 }
 	
 
@@ -120,7 +116,8 @@ int main() {
 		//tm.start();
 
 		cv::Mat src = sc.captureScreenMat(hwnd);
-		extractWhiteBoxContour(src);
+		cv::Mat output = extractWhiteBoxContour(src);
+		cv::imshow("Output", src);
 
 		//tm.stop();
 
