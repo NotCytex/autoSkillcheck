@@ -15,6 +15,15 @@
 #include <Windows.h>
 #include "screencapture.h"
 
+screencapture sc;
+cv::Mat space = cv::imread("./resources/space.png"); // Load the template image
+cv::Mat graySpace;
+cv::Rect globalROI;
+cv::Rect windowROI;
+std::chrono::steady_clock::time_point startTime;
+bool timerStarted = false;
+const std::chrono::milliseconds resetTime(1580);
+
 cv::Mat cropSpace(cv::Mat& inputImage) {
 	cv::Mat grayInput;
 	cv::cvtColor(inputImage, grayInput, cv::COLOR_BGR2GRAY); // Convert the input image to grayscale
@@ -39,14 +48,38 @@ cv::Mat cropSpace(cv::Mat& inputImage) {
 	cv::Point topLeft(max(maxLoc.x - PADDING_X, 0), max(maxLoc.y - PADDING_Y, 0));
 	cv::Point bottomRight(min(maxLoc.x + TEMPLATE_WIDTH + PADDING_X, inputImage.cols), min(maxLoc.y + TEMPLATE_HEIGHT + PADDING_Y, inputImage.rows));
 
-	// Create and return the cropped image
-	cv::Rect roi(topLeft, bottomRight);
-	cv::Mat croppedImage = inputImage(roi).clone();
+	// Ensure that the ROI is within the bounds of the image
+	topLeft.x = max(topLeft.x, 0);
+	topLeft.y = max(topLeft.y, 0);
+	bottomRight.x = min(bottomRight.x, inputImage.cols - 1);
+	bottomRight.y = min(bottomRight.y, inputImage.rows - 1);
 
-	return croppedImage;
+	// Check if the roi dimensions are valid (non-negative and width and height are positive)
+	//if (topLeft.x >= bottomRight.x || topLeft.y >= bottomRight.y) {
+	//	// Invalid roi dimensions, return an empty mat
+	//	std::cout << "Invalid roi dimensions: " << std::endl;
+	//	std::cout << "topLeft - x: " << topLeft.x << ", y: " << topLeft.y << ", bottomRight - x: " << bottomRight.x << ", y: " << bottomRight.y << std::endl;
+	//	return cv::Mat();
+	//}
+
+	// Now create the ROI with the corrected points
+	cv::Rect roi(topLeft, bottomRight);
+
+	try {
+		cv::Mat croppedImage = inputImage(roi).clone();
+		return croppedImage;
+	}
+	catch (...) {
+		std::cout << "Crop space issue" << std::endl;
+	}
+
+	// Return an empty Mat if we reach here
+	return cv::Mat();
 }
 
+
 cv::Rect extractWhiteBoxContour(cv::Mat& inputImage) {
+
 	cv::Mat croppedImage = cropSpace(inputImage);
 	if (croppedImage.empty()) {
 		return cv::Rect();
@@ -55,11 +88,20 @@ cv::Rect extractWhiteBoxContour(cv::Mat& inputImage) {
 	cv::Mat grayCroppedImage;
 	cv::cvtColor(croppedImage, grayCroppedImage, cv::COLOR_BGR2GRAY);
 
+	cv::imshow("Gray Image", grayCroppedImage);
+
 	cv::Mat mask;
 	cv::threshold(grayCroppedImage, mask, 180, 190, cv::THRESH_BINARY);
 
+	// Show the binary image
+	cv::imshow("Binary Image", mask);
+
 	std::vector<std::vector<cv::Point>> contours;
 	cv::findContours(mask, contours, cv::RETR_LIST, cv::CHAIN_APPROX_SIMPLE);
+
+	// Create an image to draw the contours
+	cv::Mat contourImage = cv::Mat::zeros(croppedImage.size(), CV_8UC3);
+
 
 	for (const auto& contour : contours) {
 		double contourArea = cv::contourArea(contour);
@@ -67,22 +109,43 @@ cv::Rect extractWhiteBoxContour(cv::Mat& inputImage) {
 		int width = boundingRect.width;
 		int height = boundingRect.height;
 
+		cv::drawContours(contourImage, std::vector<std::vector<cv::Point>>{contour}, -1, cv::Scalar(0, 255, 0), 2);
+
 		// Criteria to filter the white box contour
-		if (contourArea > 4 && width > 8 && height > 8 && width < 30 && height < 30) {
+		if (contourArea > 4 && width > 8 && height > 8 && width < 50 && height < 50) {
 			std::cout << "Found" << std::endl;
-			return boundingRect;
+
+			cv::rectangle(contourImage, boundingRect, cv::Scalar(0, 0, 255), 2);
+			cv::imshow("Contours", contourImage);
+
+			return cv::Rect(boundingRect);
 		}
 	}
 
 	std::cout << "Failed" << std::endl;
 	return cv::Rect();
 }
-	
-screencapture sc;
-cv::Mat space = cv::imread("./resources/space.png"); // Load the template image
-cv::Mat graySpace;
-bool foundGreatZone = false;
+
+void resetROI() {
+	globalROI = windowROI;
+	timerStarted = false;
+	std::cout << "Reset ROI" << std::endl;
+}
+
+bool detectRed(const cv::Mat& inputImage) {
+	cv::Mat mask;
+	cv::inRange(inputImage, cv::Scalar(0, 0, 150), cv::Scalar(30, 30, 175), mask);
+
+	return cv::countNonZero(mask) > 0;
+}
+
+void pressSpace() {
+	std::cout << "Space" << std::endl;
+}
+
 int main() {
+	cv::cvtColor(space, graySpace, cv::COLOR_BGR2GRAY);
+
 	LPCWSTR window_title = L"Skill Check Simulator - Brave";
 	//LPCWSTR window_title = L"DeadByDaylight  ";
 	HWND hwnd = FindWindow(NULL, window_title);
@@ -101,53 +164,46 @@ int main() {
 	int height = windowRect.bottom;
 	
 	cv::Rect roi(topLeftX, topLeftY, width, height);
+	windowROI = roi;
+	globalROI = windowROI;
 
 	// Declare variables to calculate FPS
 	double fps;
 	cv::TickMeter tm;
-	cv::cvtColor(space, graySpace, cv::COLOR_BGR2GRAY);
-
+	
 	while (true) {
 		tm.reset();
 		tm.start();
-		cv::Mat src = sc.captureScreenMat(hwnd, roi);
-		extractWhiteBoxContour(src);
 
-		//problem here causing exception unhandled
-		//if (!foundGreatZone) {
-		//	roi = extractWhiteBoxContour(src);
-		//	if (roi.area() > 0) {
-		//		foundGreatZone = true;
-		//	}
-		//	std::cout << roi << std::endl;
-		//}
-		//else {
-		//	cv::Mat redMask;
-		//	cv::inRange(src, cv::Scalar(0, 0, 150), cv::Scalar(50, 50, 255), redMask);
-		//	if (cv::countNonZero(redMask) > 10) {
-		//		// Simulate pressing the spacebar
-		//		INPUT input;
-		//		input.type = INPUT_KEYBOARD;
-		//		input.ki.wVk = VK_SPACE;
-		//		input.ki.dwFlags = 0;  // key down
-		//		SendInput(1, &input, sizeof(INPUT));
-		//		input.ki.dwFlags = KEYEVENTF_KEYUP;  // key up
-		//		SendInput(1, &input, sizeof(INPUT));
+		cv::Mat src = sc.captureScreenMat(hwnd, globalROI);
+		cv::Rect whiteBoxRect = extractWhiteBoxContour(src);
 
-		//		foundGreatZone = false;
-		//		roi = cv::Rect(topLeftX, topLeftY, width, height);
-		//	}
-		//}
+		//std::cout << "globalROI - x: " << globalROI.x << ", y: " << globalROI.y << ", width: " << globalROI.width << ", height: " << globalROI.height << std::endl;
 
+
+		if (!whiteBoxRect.empty()) {
+			startTime = std::chrono::steady_clock::now();
+			timerStarted = true;
+
+			globalROI = whiteBoxRect;
+
+
+			if (detectRed(src(globalROI))) {
+				pressSpace();
+				resetROI();
+			}
+		}
+	
+		if (timerStarted && (std::chrono::steady_clock::now() - startTime) > resetTime) {
+			resetROI();
+		}
 
 		tm.stop();
 
-	 //Calculate frames per second (FPS)
+		 //Calculate frames per second (FPS)
 		fps = 1.0 / tm.getTimeSec();
-		std::cout << "FPS: " << fps << std::endl;
-
-	// Break the loop if 'ESC' key is pressed.
-		if (cv::waitKey(1) == 27)
+		//std::cout << "FPS: " << fps << std::endl;
+		if (cv::waitKey(5) == 27)
 			break;
 	}
 
