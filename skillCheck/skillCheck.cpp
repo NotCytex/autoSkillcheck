@@ -20,11 +20,13 @@ cv::Mat space = cv::imread("./resources/space.png"); // Load the template image
 cv::Mat graySpace;
 cv::Rect globalROI;
 cv::Rect windowROI;
+int prevWhiteBoxWidth = 0;
+int prevWhiteBoxHeight = 0;
 std::chrono::steady_clock::time_point startTime;
 bool timerStarted = false;
 const std::chrono::milliseconds resetTime(1580);
 
-cv::Mat cropSpace(cv::Mat& inputImage) {
+std::pair<cv::Mat, cv::Rect> cropSpace(cv::Mat& inputImage) {
 	cv::Mat grayInput;
 	cv::cvtColor(inputImage, grayInput, cv::COLOR_BGR2GRAY); // Convert the input image to grayscale
 
@@ -37,7 +39,7 @@ cv::Mat cropSpace(cv::Mat& inputImage) {
 
 	constexpr double MATCH_THRESHOLD = 0.7;
 	if (maxVal <= MATCH_THRESHOLD) {
-		return cv::Mat();
+		return { cv::Mat(), cv::Rect() };
 	}
 
 	constexpr int PADDING_X = 25; // Horizontal padding
@@ -55,32 +57,32 @@ cv::Mat cropSpace(cv::Mat& inputImage) {
 	bottomRight.y = min(bottomRight.y, inputImage.rows - 1);
 
 	// Check if the roi dimensions are valid (non-negative and width and height are positive)
-	//if (topLeft.x >= bottomRight.x || topLeft.y >= bottomRight.y) {
-	//	// Invalid roi dimensions, return an empty mat
-	//	std::cout << "Invalid roi dimensions: " << std::endl;
-	//	std::cout << "topLeft - x: " << topLeft.x << ", y: " << topLeft.y << ", bottomRight - x: " << bottomRight.x << ", y: " << bottomRight.y << std::endl;
-	//	return cv::Mat();
-	//}
+	if (topLeft.x >= bottomRight.x || topLeft.y >= bottomRight.y) {
+		// Invalid roi dimensions, return an empty mat
+		std::cout << "Invalid roi dimensions: " << std::endl;
+		std::cout << "topLeft - x: " << topLeft.x << ", y: " << topLeft.y << ", bottomRight - x: " << bottomRight.x << ", y: " << bottomRight.y << std::endl;
+		return { cv::Mat(), cv::Rect() };
+	}
 
 	// Now create the ROI with the corrected points
 	cv::Rect roi(topLeft, bottomRight);
 
 	try {
 		cv::Mat croppedImage = inputImage(roi).clone();
-		return croppedImage;
+		return { croppedImage, roi };
 	}
 	catch (...) {
 		std::cout << "Crop space issue" << std::endl;
 	}
 
 	// Return an empty Mat if we reach here
-	return cv::Mat();
+	return { cv::Mat(), cv::Rect() };
 }
 
 
-cv::Rect extractWhiteBoxContour(cv::Mat& inputImage) {
+cv::Rect extractWhiteBoxContour(const cv::Mat& croppedImage) {
 
-	cv::Mat croppedImage = cropSpace(inputImage);
+	//cv::Mat croppedImage = cropSpace(inputImage);
 	if (croppedImage.empty()) {
 		return cv::Rect();
 	}
@@ -109,7 +111,7 @@ cv::Rect extractWhiteBoxContour(cv::Mat& inputImage) {
 		int width = boundingRect.width;
 		int height = boundingRect.height;
 
-		cv::drawContours(contourImage, std::vector<std::vector<cv::Point>>{contour}, -1, cv::Scalar(0, 255, 0), 2);
+		//cv::drawContours(contourImage, std::vector<std::vector<cv::Point>>{contour}, -1, cv::Scalar(0, 255, 0), 2);
 
 		// Criteria to filter the white box contour
 		if (contourArea > 4 && width > 8 && height > 8 && width < 50 && height < 50) {
@@ -140,6 +142,8 @@ bool detectRed(const cv::Mat& inputImage) {
 }
 
 void pressSpace() {
+	keybd_event(VK_SPACE, 0, 0, 0); // Press
+	keybd_event(VK_SPACE, 0, KEYEVENTF_KEYUP, 0); // Release
 	std::cout << "Space" << std::endl;
 }
 
@@ -170,39 +174,65 @@ int main() {
 	// Declare variables to calculate FPS
 	double fps;
 	cv::TickMeter tm;
-	
+
 	while (true) {
-		tm.reset();
-		tm.start();
-
-		cv::Mat src = sc.captureScreenMat(hwnd, globalROI);
-		cv::Rect whiteBoxRect = extractWhiteBoxContour(src);
-
-		//std::cout << "globalROI - x: " << globalROI.x << ", y: " << globalROI.y << ", width: " << globalROI.width << ", height: " << globalROI.height << std::endl;
+		try {
 
 
-		if (!whiteBoxRect.empty()) {
-			startTime = std::chrono::steady_clock::now();
-			timerStarted = true;
+			tm.reset();
+			tm.start();
 
-			globalROI = whiteBoxRect;
+			cv::Mat src = sc.captureScreenMat(hwnd, globalROI);
+			std::pair<cv::Mat, cv::Rect> croppedData = cropSpace(src);
+			cv::Mat croppedImage = croppedData.first;
+			cv::Rect croppedRoi = croppedData.second;
+			cv::Rect whiteBoxRect = extractWhiteBoxContour(croppedImage);
 
+			//std::cout << "globalROI - x: " << globalROI.x << ", y: " << globalROI.y << ", width: " << globalROI.width << ", height: " << globalROI.height << std::endl;
 
-			if (detectRed(src(globalROI))) {
-				pressSpace();
-				resetROI();
+			if (!whiteBoxRect.empty() && !timerStarted) {
+				startTime = std::chrono::steady_clock::now();
+				timerStarted = true;
+				globalROI = cv::Rect(croppedRoi.x + whiteBoxRect.x, croppedRoi.y + whiteBoxRect.y, whiteBoxRect.width, whiteBoxRect.height);
+				//cv::rectangle(src, globalROI, cv::Scalar(0, 255, 0), 2); // Draw globalROI in green
+				//cv::imshow("Debug", src);
+				/*cv::Mat roi = src(globalROI).clone();
+				imshow("ROI", roi);*/
+
+				/*if (detectRed(src(globalROI))) {
+					pressSpace();
+					resetROI();
+				}*/
 			}
-		}
-	
-		if (timerStarted && (std::chrono::steady_clock::now() - startTime) > resetTime) {
-			resetROI();
-		}
 
-		tm.stop();
+			if (timerStarted) {
+				cv::Mat roi = src(globalROI);
+				cv::imshow("Debugggg", roi);
+				if (detectRed(roi)) {
+					pressSpace();
+					resetROI();
+				}
+				else if ((std::chrono::steady_clock::now() - startTime) > resetTime) {
+					resetROI();
+				}
 
-		 //Calculate frames per second (FPS)
-		fps = 1.0 / tm.getTimeSec();
-		//std::cout << "FPS: " << fps << std::endl;
+			}
+
+			tm.stop();
+
+			//Calculate frames per second (FPS)
+			fps = 1.0 / tm.getTimeSec();
+			//std::cout << "FPS: " << fps << std::endl;
+		}
+		catch (const cv::Exception& e) {
+			std::cerr << "OpenCV Exception caught: " << e.what() << std::endl;
+		}
+		catch (const std::exception& e) {
+			std::cerr << "Standard exception caught: " << e.what() << std::endl;
+		}
+		catch (...) {
+			std::cerr << "Unknown exception caught!" << std::endl;
+		}
 		if (cv::waitKey(5) == 27)
 			break;
 	}
