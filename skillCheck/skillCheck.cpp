@@ -17,6 +17,7 @@
 
 screencapture sc;
 cv::Mat space = cv::imread("./resources/space.png"); // Load the template image
+cv::Mat red = cv::imread("./resources/red.png");
 cv::Mat graySpace;
 cv::Rect globalROI;
 cv::Rect windowROI;
@@ -24,7 +25,7 @@ int prevWhiteBoxWidth = 0;
 int prevWhiteBoxHeight = 0;
 std::chrono::steady_clock::time_point startTime;
 bool timerStarted = false;
-const std::chrono::milliseconds resetTime(1580);
+const std::chrono::milliseconds resetTime(1590);
 
 std::pair<cv::Mat, cv::Rect> cropSpace(cv::Mat& inputImage) {
 	cv::Mat grayInput;
@@ -90,13 +91,13 @@ cv::Rect extractWhiteBoxContour(const cv::Mat& croppedImage) {
 	cv::Mat grayCroppedImage;
 	cv::cvtColor(croppedImage, grayCroppedImage, cv::COLOR_BGR2GRAY);
 
-	cv::imshow("Gray Image", grayCroppedImage);
+	//cv::imshow("Gray Image", grayCroppedImage);
 
 	cv::Mat mask;
 	cv::threshold(grayCroppedImage, mask, 180, 190, cv::THRESH_BINARY);
 
 	// Show the binary image
-	cv::imshow("Binary Image", mask);
+	//cv::imshow("Binary Image", mask);
 
 	std::vector<std::vector<cv::Point>> contours;
 	cv::findContours(mask, contours, cv::RETR_LIST, cv::CHAIN_APPROX_SIMPLE);
@@ -118,7 +119,7 @@ cv::Rect extractWhiteBoxContour(const cv::Mat& croppedImage) {
 			std::cout << "Found" << std::endl;
 
 			cv::rectangle(contourImage, boundingRect, cv::Scalar(0, 0, 255), 2);
-			cv::imshow("Contours", contourImage);
+			//cv::imshow("Contours", contourImage);
 
 			return cv::Rect(boundingRect);
 		}
@@ -135,10 +136,23 @@ void resetROI() {
 }
 
 bool detectRed(const cv::Mat& inputImage) {
-	cv::Mat mask;
-	cv::inRange(inputImage, cv::Scalar(0, 0, 150), cv::Scalar(30, 30, 175), mask);
+	const int rows = inputImage.rows;
+	const int cols = inputImage.cols;
 
-	return cv::countNonZero(mask) > 0;
+	for (int y = 0; y < rows; y++) {
+		for (int x = 0; x < cols; x++) {
+			cv::Vec3b pixel = inputImage.at<cv::Vec3b>(y, x);
+
+			if (pixel[2] > 145 && pixel[2] < 255 && pixel[0] > 0 && pixel[1] < 40 && pixel[0] > 0  && pixel[0] < 40) {
+				return true;
+			}
+		}
+	}
+	return false;
+}
+
+bool hasValidHeight(const cv::Mat& image) {
+	return image.rows <= 800;
 }
 
 void pressSpace() {
@@ -174,55 +188,54 @@ int main() {
 	// Declare variables to calculate FPS
 	double fps;
 	cv::TickMeter tm;
+	
+	/*if (detectRed(red)) {
+		std::cout << "Hi" << std::endl;
+	}*/
 
-	while (true) {
+	while (true) { 
 		try {
-
-
 			tm.reset();
 			tm.start();
 
-			cv::Mat src = sc.captureScreenMat(hwnd, globalROI);
-			std::pair<cv::Mat, cv::Rect> croppedData = cropSpace(src);
-			cv::Mat croppedImage = croppedData.first;
-			cv::Rect croppedRoi = croppedData.second;
-			cv::Rect whiteBoxRect = extractWhiteBoxContour(croppedImage);
-
 			//std::cout << "globalROI - x: " << globalROI.x << ", y: " << globalROI.y << ", width: " << globalROI.width << ", height: " << globalROI.height << std::endl;
-
-			if (!whiteBoxRect.empty() && !timerStarted) {
-				startTime = std::chrono::steady_clock::now();
-				timerStarted = true;
-				globalROI = cv::Rect(croppedRoi.x + whiteBoxRect.x, croppedRoi.y + whiteBoxRect.y, whiteBoxRect.width, whiteBoxRect.height);
-				//cv::rectangle(src, globalROI, cv::Scalar(0, 255, 0), 2); // Draw globalROI in green
-				//cv::imshow("Debug", src);
-				/*cv::Mat roi = src(globalROI).clone();
-				imshow("ROI", roi);*/
-
-				/*if (detectRed(src(globalROI))) {
-					pressSpace();
-					resetROI();
-				}*/
-			}
+			cv::Mat src = sc.captureScreenMat(hwnd, globalROI);
+			//cv::imshow("Source", src);
+			//std::cout << "Width: " << src.cols << ", Height: " << src.rows << std::endl;
 
 			if (timerStarted) {
-				cv::Mat roi = src(globalROI);
-				cv::imshow("Debugggg", roi);
-				if (detectRed(roi)) {
+				if (detectRed(src)) {
 					pressSpace();
-					resetROI();
+					cv::imshow("Source", src); 
+					resetROI(); 
 				}
 				else if ((std::chrono::steady_clock::now() - startTime) > resetTime) {
+					std::cout << "Timer Ended" << std::endl;
 					resetROI();
 				}
 
 			}
 
+			else {
+				std::pair<cv::Mat, cv::Rect> croppedData = cropSpace(src);
+				cv::Mat croppedImage = croppedData.first;
+				cv::Rect croppedRoi = croppedData.second;
+				cv::Rect whiteBoxRect = extractWhiteBoxContour(croppedImage);
+
+				if (!whiteBoxRect.empty()) {
+					startTime = std::chrono::steady_clock::now();
+					timerStarted = true;
+					std::cout << "Started Timer" << std::endl;
+					globalROI = cv::Rect(croppedRoi.x + whiteBoxRect.x, croppedRoi.y + whiteBoxRect.y, whiteBoxRect.width, whiteBoxRect.height);
+				}
+			}
+		
+			src = cv::Mat();
 			tm.stop();
 
 			//Calculate frames per second (FPS)
 			fps = 1.0 / tm.getTimeSec();
-			//std::cout << "FPS: " << fps << std::endl;
+			std::cout << "FPS: " << fps << std::endl;
 		}
 		catch (const cv::Exception& e) {
 			std::cerr << "OpenCV Exception caught: " << e.what() << std::endl;
