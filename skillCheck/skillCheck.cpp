@@ -17,7 +17,7 @@
 
 screencapture sc;
 cv::Mat space = cv::imread("./resources/space.png"); // Load the template image
-cv::Mat red = cv::imread("./resources/red.png");
+cv::Mat red = cv::imread("./resources/test.png");
 cv::Mat graySpace;
 cv::Rect globalROI;
 cv::Rect windowROI;
@@ -43,9 +43,9 @@ std::pair<cv::Mat, cv::Rect> cropSpace(cv::Mat& inputImage) {
 		return { cv::Mat(), cv::Rect() };
 	}
 
-	constexpr int PADDING_X = 25; // Horizontal padding
-	constexpr int PADDING_Y = 68; // Vertical padding
-	constexpr int TEMPLATE_WIDTH = 128;
+	constexpr int PADDING_X = 33; // Horizontal padding
+	constexpr int PADDING_Y = 73 ; // Vertical padding
+	constexpr int TEMPLATE_WIDTH = 127;
 	constexpr int TEMPLATE_HEIGHT = 39;
 
 	cv::Point topLeft(max(maxLoc.x - PADDING_X, 0), max(maxLoc.y - PADDING_Y, 0));
@@ -68,22 +68,18 @@ std::pair<cv::Mat, cv::Rect> cropSpace(cv::Mat& inputImage) {
 	// Now create the ROI with the corrected points
 	cv::Rect roi(topLeft, bottomRight);
 
-	try {
-		cv::Mat croppedImage = inputImage(roi).clone();
-		return { croppedImage, roi };
-	}
-	catch (...) {
-		std::cout << "Crop space issue" << std::endl;
-	}
 
-	// Return an empty Mat if we reach here
-	return { cv::Mat(), cv::Rect() };
+	cv::Mat croppedImage = inputImage(roi);  
+
+	cv::Point rectTopLeft((croppedImage.cols - 127) / 2, (croppedImage.rows - 39) / 2);
+	cv::Point rectBottomRight(rectTopLeft.x + 127, rectTopLeft.y + 39);
+
+	cv::rectangle(croppedImage, rectTopLeft, rectBottomRight, cv::Scalar(0, 0, 0), -1); // -1 means fill the rectangle
+	return { croppedImage, roi };
 }
 
 
 cv::Rect extractWhiteBoxContour(const cv::Mat& croppedImage) {
-
-	//cv::Mat croppedImage = cropSpace(inputImage);
 	if (croppedImage.empty()) {
 		return cv::Rect();
 	}
@@ -94,10 +90,10 @@ cv::Rect extractWhiteBoxContour(const cv::Mat& croppedImage) {
 	//cv::imshow("Gray Image", grayCroppedImage);
 
 	cv::Mat mask;
-	cv::threshold(grayCroppedImage, mask, 180, 190, cv::THRESH_BINARY);
+	cv::threshold(grayCroppedImage, mask, 250 , 255, cv::THRESH_BINARY);
 
 	// Show the binary image
-	//cv::imshow("Binary Image", mask);
+	cv::imshow("Binary Image", mask);
 
 	std::vector<std::vector<cv::Point>> contours;
 	cv::findContours(mask, contours, cv::RETR_LIST, cv::CHAIN_APPROX_SIMPLE);
@@ -112,14 +108,19 @@ cv::Rect extractWhiteBoxContour(const cv::Mat& croppedImage) {
 		int width = boundingRect.width;
 		int height = boundingRect.height;
 
-		//cv::drawContours(contourImage, std::vector<std::vector<cv::Point>>{contour}, -1, cv::Scalar(0, 255, 0), 2);
+		cv::drawContours(contourImage, std::vector<std::vector<cv::Point>>{contour}, -1, cv::Scalar(0, 255, 0), 2);
 
 		// Criteria to filter the white box contour
-		if (contourArea > 4 && width > 8 && height > 8 && width < 50 && height < 50) {
+		//if (contourArea > 40 && width > 18 && height > 18 && width < 30 && height < 30) {
+		if (contourArea >= 70 && width >= 8 && height >= 8 && width <= 100 && height <= 100) {
 			std::cout << "Found" << std::endl;
 
 			cv::rectangle(contourImage, boundingRect, cv::Scalar(0, 0, 255), 2);
-			//cv::imshow("Contours", contourImage);
+			cv::imshow("Contours", contourImage);
+
+			/*std::cout << "Width" << width << std::endl;
+			std::cout << "Height" << height << std::endl;
+			std::cout << "Area" << contourArea << std::endl;*/
 
 			return cv::Rect(boundingRect);
 		}
@@ -132,7 +133,7 @@ cv::Rect extractWhiteBoxContour(const cv::Mat& croppedImage) {
 void resetROI() {
 	globalROI = windowROI;
 	timerStarted = false;
-	std::cout << "Reset ROI" << std::endl;
+	//std::cout << "Reset ROI" << std::endl;
 }
 
 bool detectRed(const cv::Mat& inputImage) {
@@ -143,7 +144,7 @@ bool detectRed(const cv::Mat& inputImage) {
 		for (int x = 0; x < cols; x++) {
 			cv::Vec3b pixel = inputImage.at<cv::Vec3b>(y, x);
 
-			if (pixel[2] > 145 && pixel[2] < 255 && pixel[0] > 0 && pixel[1] < 40 && pixel[0] > 0  && pixel[0] < 40) {
+			if (pixel[2] > 160 && pixel[2] < 255 && pixel[0] > 0 && pixel[1] < 30 && pixel[0] > 0  && pixel[0] < 30) {
 				return true;
 			}
 		}
@@ -151,21 +152,24 @@ bool detectRed(const cv::Mat& inputImage) {
 	return false;
 }
 
-bool hasValidHeight(const cv::Mat& image) {
-	return image.rows <= 800;
-}
-
 void pressSpace() {
-	keybd_event(VK_SPACE, 0, 0, 0); // Press
-	keybd_event(VK_SPACE, 0, KEYEVENTF_KEYUP, 0); // Release
-	std::cout << "Space" << std::endl;
+	// Setup the input event
+	INPUT input[2] = {};
+	input[0].type = INPUT_KEYBOARD;
+	input[0].ki.wVk = VK_SPACE;
+
+	input[1] = input[0];
+	input[1].ki.dwFlags = KEYEVENTF_KEYUP;
+
+	// Send the input event (press and release space key)
+	SendInput(2, input, sizeof(INPUT));
 }
 
 int main() {
 	cv::cvtColor(space, graySpace, cv::COLOR_BGR2GRAY);
 
-	LPCWSTR window_title = L"Skill Check Simulator - Brave";
-	//LPCWSTR window_title = L"DeadByDaylight  ";
+	//LPCWSTR window_title = L"Skill Check Simulator - Brave";
+	LPCWSTR window_title = L"DeadByDaylight  ";
 	HWND hwnd = FindWindow(NULL, window_title);
 	if (hwnd == NULL) {
 		std::cerr << "Could not find window. Error: " << GetLastError() << std::endl;
@@ -186,66 +190,51 @@ int main() {
 	globalROI = windowROI;
 
 	// Declare variables to calculate FPS
-	double fps;
-	cv::TickMeter tm;
-	
-	/*if (detectRed(red)) {
-		std::cout << "Hi" << std::endl;
-	}*/
+	//double fps;
+	//cv::TickMeter tm;
+
+	extractWhiteBoxContour(red);
 
 	while (true) { 
-		try {
-			tm.reset();
-			tm.start();
+		//tm.reset();
+		//tm.start();
 
-			//std::cout << "globalROI - x: " << globalROI.x << ", y: " << globalROI.y << ", width: " << globalROI.width << ", height: " << globalROI.height << std::endl;
-			cv::Mat src = sc.captureScreenMat(hwnd, globalROI);
-			//cv::imshow("Source", src);
-			//std::cout << "Width: " << src.cols << ", Height: " << src.rows << std::endl;
+		//std::cout << "globalROI - x: " << globalROI.x << ", y: " << globalROI.y << ", width: " << globalROI.width << ", height: " << globalROI.height << std::endl;
+		cv::Mat src = sc.captureScreenMat(hwnd, globalROI);
+		//cv::imshow("Source", src);
+		//std::cout << "Width: " << src.cols << ", Height: " << src.rows << std::endl;
 
-			if (timerStarted) {
-				if (detectRed(src)) {
-					pressSpace();
-					cv::imshow("Source", src); 
-					resetROI(); 
-				}
-				else if ((std::chrono::steady_clock::now() - startTime) > resetTime) {
-					std::cout << "Timer Ended" << std::endl;
-					resetROI();
-				}
-
+		if (timerStarted) {
+			if (detectRed(src)) {
+				pressSpace();
+				cv::imshow("Source", src); 
+				resetROI(); 
+			}
+			else if ((std::chrono::steady_clock::now() - startTime) > resetTime) {
+				resetROI();
 			}
 
-			else {
-				std::pair<cv::Mat, cv::Rect> croppedData = cropSpace(src);
-				cv::Mat croppedImage = croppedData.first;
-				cv::Rect croppedRoi = croppedData.second;
-				cv::Rect whiteBoxRect = extractWhiteBoxContour(croppedImage);
+		}
 
-				if (!whiteBoxRect.empty()) {
-					startTime = std::chrono::steady_clock::now();
-					timerStarted = true;
-					std::cout << "Started Timer" << std::endl;
-					globalROI = cv::Rect(croppedRoi.x + whiteBoxRect.x, croppedRoi.y + whiteBoxRect.y, whiteBoxRect.width, whiteBoxRect.height);
-				}
+		else {
+			std::pair<cv::Mat, cv::Rect> croppedData = cropSpace(src);
+			cv::Mat croppedImage = croppedData.first;
+			cv::Rect croppedRoi = croppedData.second;
+			cv::Rect whiteBoxRect = extractWhiteBoxContour(croppedImage);
+
+			if (!whiteBoxRect.empty()) {
+				startTime = std::chrono::steady_clock::now();
+				timerStarted = true;
+				globalROI = cv::Rect(croppedRoi.x + whiteBoxRect.x, croppedRoi.y + whiteBoxRect.y, whiteBoxRect.width - 4, whiteBoxRect.height - 4);
 			}
+		}
+
+		//tm.stop();
+
+		//Calculate frames per second (FPS)
+		//fps = 1.0 / tm.getTimeSec();
+		//std::cout << "FPS: " << fps << std::endl;
 		
-			src = cv::Mat();
-			tm.stop();
-
-			//Calculate frames per second (FPS)
-			fps = 1.0 / tm.getTimeSec();
-			std::cout << "FPS: " << fps << std::endl;
-		}
-		catch (const cv::Exception& e) {
-			std::cerr << "OpenCV Exception caught: " << e.what() << std::endl;
-		}
-		catch (const std::exception& e) {
-			std::cerr << "Standard exception caught: " << e.what() << std::endl;
-		}
-		catch (...) {
-			std::cerr << "Unknown exception caught!" << std::endl;
-		}
 		if (cv::waitKey(5) == 27)
 			break;
 	}
