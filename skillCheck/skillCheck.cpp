@@ -43,7 +43,7 @@ std::pair<cv::Mat, cv::Rect> cropSpace(cv::Mat& inputImage) {
 		return { cv::Mat(), cv::Rect() };
 	}
 
-	constexpr int PADDING_X = 33; // Horizontal padding
+	constexpr int PADDING_X = 30; // Horizontal padding
 	constexpr int PADDING_Y = 73 ; // Vertical padding
 	constexpr int TEMPLATE_WIDTH = 127;
 	constexpr int TEMPLATE_HEIGHT = 39;
@@ -93,13 +93,13 @@ cv::Rect extractWhiteBoxContour(const cv::Mat& croppedImage) {
 	cv::threshold(grayCroppedImage, mask, 250 , 255, cv::THRESH_BINARY);
 
 	// Show the binary image
-	cv::imshow("Binary Image", mask);
+	//cv::imshow("Binary Image", mask);
 
 	std::vector<std::vector<cv::Point>> contours;
 	cv::findContours(mask, contours, cv::RETR_LIST, cv::CHAIN_APPROX_SIMPLE);
 
 	// Create an image to draw the contours
-	cv::Mat contourImage = cv::Mat::zeros(croppedImage.size(), CV_8UC3);
+	//cv::Mat contourImage = cv::Mat::zeros(croppedImage.size(), CV_8UC3);
 
 
 	for (const auto& contour : contours) {
@@ -108,25 +108,21 @@ cv::Rect extractWhiteBoxContour(const cv::Mat& croppedImage) {
 		int width = boundingRect.width;
 		int height = boundingRect.height;
 
-		cv::drawContours(contourImage, std::vector<std::vector<cv::Point>>{contour}, -1, cv::Scalar(0, 255, 0), 2);
+		//cv::drawContours(contourImage, std::vector<std::vector<cv::Point>>{contour}, -1, cv::Scalar(0, 255, 0), 2);
 
 		// Criteria to filter the white box contour
 		//if (contourArea > 40 && width > 18 && height > 18 && width < 30 && height < 30) {
 		if (contourArea >= 70 && width >= 8 && height >= 8 && width <= 100 && height <= 100) {
-			std::cout << "Found" << std::endl;
+			//std::cout << "Found" << std::endl;
 
-			cv::rectangle(contourImage, boundingRect, cv::Scalar(0, 0, 255), 2);
-			cv::imshow("Contours", contourImage);
-
-			/*std::cout << "Width" << width << std::endl;
-			std::cout << "Height" << height << std::endl;
-			std::cout << "Area" << contourArea << std::endl;*/
+			//cv::rectangle(contourImage, boundingRect, cv::Scalar(0, 0, 255), 2);
+			//cv::imshow("Contours", contourImage);
 
 			return cv::Rect(boundingRect);
 		}
 	}
 
-	std::cout << "Failed" << std::endl;
+	//std::cout << "Failed" << std::endl;
 	return cv::Rect();
 }
 
@@ -139,16 +135,21 @@ void resetROI() {
 bool detectRed(const cv::Mat& inputImage) {
 	const int rows = inputImage.rows;
 	const int cols = inputImage.cols;
-
+	
+	const uchar* rowPtr;
 	for (int y = 0; y < rows; y++) {
-		for (int x = 0; x < cols; x++) {
-			cv::Vec3b pixel = inputImage.at<cv::Vec3b>(y, x);
+		rowPtr = inputImage.ptr<uchar>(y);
+		for (int x = 0; x < cols * 3; x += 3) {
+			uchar blue = rowPtr[x];
+			uchar green = rowPtr[x + 1];
+			uchar red = rowPtr[x + 2];
 
-			if (pixel[2] > 160 && pixel[2] < 255 && pixel[0] > 0 && pixel[1] < 30 && pixel[0] > 0  && pixel[0] < 30) {
+			if (red > 170 && red < 255 && green > 0 && green < 30 && blue > 0 && blue < 30) {
 				return true;
 			}
 		}
 	}
+
 	return false;
 }
 
@@ -193,7 +194,7 @@ int main() {
 	//double fps;
 	//cv::TickMeter tm;
 
-	extractWhiteBoxContour(red);
+	//extractWhiteBoxContour(red);
 
 	while (true) { 
 		//tm.reset();
@@ -207,7 +208,7 @@ int main() {
 		if (timerStarted) {
 			if (detectRed(src)) {
 				pressSpace();
-				cv::imshow("Source", src); 
+				//cv::imshow("Source", src); 
 				resetROI(); 
 			}
 			else if ((std::chrono::steady_clock::now() - startTime) > resetTime) {
@@ -234,9 +235,6 @@ int main() {
 		//Calculate frames per second (FPS)
 		//fps = 1.0 / tm.getTimeSec();
 		//std::cout << "FPS: " << fps << std::endl;
-		
-		if (cv::waitKey(5) == 27)
-			break;
 	}
 
 	cv::waitKey(0);
