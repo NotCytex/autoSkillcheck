@@ -133,24 +133,12 @@ void resetROI() {
 }
 
 bool detectRed(const cv::Mat& inputImage) {
-	const int rows = inputImage.rows;
-	const int cols = inputImage.cols;
-	
-	const uchar* rowPtr;
-	for (int y = 0; y < rows; y++) {
-		rowPtr = inputImage.ptr<uchar>(y);
-		for (int x = 0; x < cols * 3; x += 3) {
-			uchar blue = rowPtr[x];
-			uchar green = rowPtr[x + 1];
-			uchar red = rowPtr[x + 2];
+	cv::Mat mask;
+	cv::inRange(inputImage, cv::Scalar(0, 0, 250), cv::Scalar(30, 30, 255), mask);
 
-			if (red > 170 && red < 255 && green > 0 && green < 30 && blue > 0 && blue < 30) {
-				return true;
-			}
-		}
-	}
+	int redPixelCount = cv::countNonZero(mask);
 
-	return false;
+	return redPixelCount > 3;
 }
 
 void pressSpace() {
